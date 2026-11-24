@@ -30,5 +30,4 @@ Route::group(['prefix' => 'get-data'], function () {
 Route::group(['prefix' => 'draw'], function () {
     Route::post('pick', [DrawController::class, 'pick']);
     Route::get('recent', [DrawController::class, 'recent']);
-    Route::get('progress', [DrawController::class, 'progress']);
 });

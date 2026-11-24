@@ -35,20 +35,10 @@
                                                 <div v-if="wilayah.kabkota" class="fw-semibold fs-sm">
                                                     {{ wilayah.kabkota }}
                                                 </div>
-                                                <div v-if="wilayah.drawMode === 'kecamatan'"
-                                                    class="text-muted small mt-1">
-                                                    <i class="fa fa-exchange-alt me-1"></i>
-                                                    Mode: Per Kecamatan
-                                                </div>
-                                                <div v-if="!wilayah.drawMode" class="text-danger small mt-1">
-                                                    <i class="fa fa-exclamation-triangle me-1"></i>
-                                                    Mode pengundian belum di-set. Atur di menu admin: Pengaturan Undian.
-                                                </div>
-                                                <div v-if="wilayah.drawMode === 'global6'"
-                                                    class="text-danger small mt-1">
-                                                    <i class="fa fa-exclamation-triangle me-1"></i>
-                                                    Mode pengundian aktif: Global Semua Kecamatan (6 pemenang).
-                                                    Halaman undian per kecamatan tidak aktif.
+                                                <div v-if="wilayah.label" class="text-muted small mt-1">
+                                                    <i class="fa fa-map-marker-alt me-1"></i>
+                                                    <template v-if="wilayah.plat">{{ wilayah.plat }} &mdash; </template>
+                                                    {{ wilayah.label }}
                                                 </div>
                                                 <div v-if="wilayah.error" class="text-danger small mt-1">
                                                     <i class="fa fa-exclamation-triangle me-1"></i>{{ wilayah.error }}
@@ -68,49 +58,64 @@
                                                 </div>
                                             </div>
 
-                                            <!-- PILIH KECAMATAN -->
+                                            <!-- PILIH KOORDINATOR & SAMSAT -->
                                             <div class="mb-3">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <label class="form-label fw-semibold mb-0">
-                                                        <i class="fa fa-map-marker-alt me-1 text-primary"></i>
-                                                        Pilih Kecamatan
-                                                    </label>
-                                                    <button type="button"
-                                                        class="btn btn-xs btn-alt-secondary"
-                                                        :disabled="wilayah.kecamatan.length === 0"
-                                                        @click="toggleSelectAllKecamatan">
-                                                        {{ isAllKecamatanSelected ? 'Deselect All' : 'Select All' }}
-                                                    </button>
+                                                <label class="form-label fw-semibold">
+                                                    <i class="fa fa-user-tie me-1 text-primary"></i>
+                                                    Pilih Koordinator Lokasi
+                                                </label>
+                                                <div v-if="coordinatorKeys.length === 0" class="text-muted small">
+                                                    Memuat koordinator...
                                                 </div>
-                                                <div v-if="wilayah.kecamatan.length === 0" class="text-muted small">
-                                                    Memuat daftar kecamatan...
-                                                </div>
-                                                <div v-else class="border p-2 rounded bg-dark-op-10"
-                                                    style="max-height: 220px; overflow-y: auto;">
-                                                    <div v-for="kec in wilayah.kecamatan" :key="kec.id"
-                                                        class="form-check mb-1">
-                                                        <input class="form-check-input" type="checkbox"
-                                                            :id="'kec-' + kec.id" :value="kec.id"
-                                                            v-model="selectedKecamatan">
-                                                        <label class="form-check-label fs-xs" :for="'kec-' + kec.id">
-                                                            {{ kec.nama }}
-                                                            <i v-if="isDrawn(kec.id)"
-                                                                class="fa fa-check-circle text-success ms-1"
-                                                                title="Sudah diundi"></i>
-                                                        </label>
+                                                <template v-else>
+                                                    <select class="form-select form-select-sm"
+                                                        v-model="selectedCoordinator" @change="onCoordinatorChange">
+                                                        <option value="">-- Pilih Koordinator Lokasi --</option>
+                                                        <option v-for="key in coordinatorKeys" :key="key" :value="key">
+                                                            {{ coordinatorLabel(key) }}
+                                                        </option>
+                                                    </select>
+
+                                                    <div v-if="selectedCoordinator"
+                                                        class="border p-2 rounded mt-2">
+                                                        <div
+                                                            class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1">
+                                                            <span class="fw-semibold text-primary fs-sm">
+                                                                Daftar Samsat
+                                                            </span>
+                                                            <button type="button"
+                                                                class="btn btn-xs btn-alt-secondary"
+                                                                @click="toggleSelectAllSamsat">
+                                                                {{ isAllSamsatSelected ? 'Deselect All' : 'Select All' }}
+                                                            </button>
+                                                        </div>
+                                                        <div v-for="samsat in selectedSamsatOptions"
+                                                            :key="samsat" class="form-check mb-1">
+                                                            <input class="form-check-input" type="checkbox"
+                                                                :id="'samsat-' + samsat" :value="samsat"
+                                                                v-model="selectedSamsats">
+                                                            <label class="form-check-label fs-xs"
+                                                                :for="'samsat-' + samsat">
+                                                                {{ samsat }}
+                                                                <i v-if="isDrawn(samsat)"
+                                                                    class="fa fa-check-circle text-success ms-1"
+                                                                    title="Sudah diundi"></i>
+                                                            </label>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div v-if="drawnKecamatan.length"
-                                                    class="d-flex justify-content-between align-items-center mt-1">
-                                                    <span class="text-muted" style="font-size: 0.7rem;">
-                                                        <i class="fa fa-check-circle text-success me-1"></i>
-                                                        {{ drawnKecamatan.length }} kecamatan sudah diundi
-                                                    </span>
-                                                    <button type="button" class="btn btn-xs btn-alt-danger"
-                                                        @click="resetDrawn">
-                                                        Reset
-                                                    </button>
-                                                </div>
+
+                                                    <div v-if="drawnSamsats.length"
+                                                        class="d-flex justify-content-between align-items-center mt-1">
+                                                        <span class="text-muted" style="font-size: 0.7rem;">
+                                                            <i class="fa fa-check-circle text-success me-1"></i>
+                                                            {{ drawnSamsats.length }} Samsat sudah diundi
+                                                        </span>
+                                                        <button type="button" class="btn btn-xs btn-alt-danger"
+                                                            @click="resetDrawn">
+                                                            Reset
+                                                        </button>
+                                                    </div>
+                                                </template>
                                             </div>
 
                                             <!-- KATEGORI HADIAH -->
@@ -158,16 +163,16 @@
                                                 </div>
                                             </div>
 
-                                            <!-- JUMLAH PEMENANG PER KECAMATAN -->
+                                            <!-- JUMLAH PEMENANG PER SAMSAT -->
                                             <div class="mb-3">
                                                 <label class="form-label fw-semibold">
                                                     <i class="fa fa-users me-1 text-primary"></i>
-                                                    Jumlah Pemenang per Kecamatan
+                                                    Jumlah Pemenang per Samsat
                                                 </label>
                                                 <input type="number" min="1" class="form-control form-control-sm"
                                                     v-model.number="winnersPerPage">
                                                 <div class="text-muted mt-1" style="font-size: 0.72rem;">
-                                                    {{ selectedKecamatan.length }} kecamatan ×
+                                                    {{ selectedSamsats.length }} Samsat ×
                                                     {{ winnersPerPage || 0 }} =
                                                     <strong>{{ requiredWinners }}</strong> pemenang / halaman
                                                 </div>
@@ -176,8 +181,8 @@
                                             <!-- SUMMARY -->
                                             <div class="mb-3 settings-summary">
                                                 <div class="d-flex justify-content-between small mb-1">
-                                                    <span>Kecamatan dipilih:</span>
-                                                    <strong>{{ selectedKecamatan.length }}</strong>
+                                                    <span>Samsat dipilih:</span>
+                                                    <strong>{{ selectedSamsats.length }}</strong>
                                                 </div>
                                                 <div class="d-flex justify-content-between small mb-1">
                                                     <span>Pemenang dibutuhkan:</span>
@@ -302,8 +307,23 @@
                                         v-model.number="tableSize">
                                 </div>
                                 <div class="text-muted mt-1" style="font-size: 0.72rem;">
-                                    Ukuran tabel undian: {{ tableSize }}%
+                                    Skala tabel (ukuran sel): {{ tableSize }}%
                                 </div>
+
+                                <div class="mt-2">
+                                    <label class="form-label fs-xs mb-0">Ukuran Font Tabel</label>
+                                    <div class="d-flex align-items-center gap-2 mt-1">
+                                        <input type="range" class="form-range flex-grow-1" min="8"
+                                            max="28" step="1" v-model.number="tableFontSize">
+                                        <input type="number" class="form-control form-control-sm"
+                                            style="width: 84px;" min="8" max="28" step="1"
+                                            v-model.number="tableFontSize">
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size: 0.72rem;">
+                                        {{ tableFontSize }} px
+                                    </div>
+                                </div>
+
                                 <div class="row g-2 mt-1">
                                     <div class="col-6">
                                         <label class="form-label fs-xs mb-0">Latar Kartu</label>
@@ -400,42 +420,48 @@
                                 <div class="kec-grid"
                                     :class="{ 'kec-grid-single': form.samsats.length <= 1 }"
                                     :style="{ '--kec-cols': kecColumns }">
-                                    <div v-for="(kecId, idx) in form.samsats" :key="kecId" class="kec-item">
+                                    <div v-for="(samsat, idx) in form.samsats" :key="samsat" class="kec-item">
                                         <div class="kec-card p-2 h-100">
                                             <div
                                                 class="kec-card-head d-flex justify-content-between align-items-center pb-1 mb-1">
-                                                <span class="kec-title fs-xs text-truncate" style="max-width: 78%;">
-                                                    <i class="fa fa-map-marker-alt me-1"></i>{{ kecamatanName(kecId) }}
+                                                <span class="kec-title fs-xs text-truncate" :title="samsat">
+                                                    <i class="fa fa-map-marker-alt me-1"></i>{{ samsat }}
                                                 </span>
                                                 <span class="badge bg-danger fs-xs">Drawing...</span>
                                             </div>
                                             <table class="table table-sm table-vcenter kec-table mb-0">
+                                                <colgroup>
+                                                    <col v-for="(width, column) in tableColumnWidths" :key="column"
+                                                        :style="{ width }">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th v-if="form.winnersPerPage > 1" style="width: 8%;">#</th>
-                                                        <th style="width: 25%;">No. Polisi</th>
-                                                        <th style="width: 42%;">Nama</th>
-                                                        <th style="width: 25%;">Hadiah</th>
+                                                        <th v-if="form.winnersPerPage > 1">#</th>
+                                                        <th>No. Polisi</th>
+                                                        <th>Nama</th>
+                                                        <th>Hadiah</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <tr v-for="row in perKecamatanRows" :key="row">
-                                                        <template
-                                                            v-if="undianList[idx * form.winnersPerPage + row - 1]">
-                                                            <td v-if="form.winnersPerPage > 1">{{ row }}</td>
-                                                            <td class="fw-bold text-nowrap">
-                                                                {{ undianList[idx * form.winnersPerPage + row - 1].kodeWilayah }}
-                                                                {{ undianList[idx * form.winnersPerPage + row - 1].angka }}
-                                                                {{ undianList[idx * form.winnersPerPage + row - 1].kodeSeri }}
+                                                    <tr v-for="(item, row) in rowsBySamsat[samsat] || []" :key="row">
+                                                        <template v-if="item">
+                                                            <td v-if="form.winnersPerPage > 1">{{ row + 1 }}</td>
+                                                            <td class="fw-bold text-truncate">
+                                                                {{ item.kodeWilayah }} {{ item.angka }} {{ item.kodeSeri }}
                                                             </td>
-                                                            <td class="text-truncate" style="max-width: 120px;">
+                                                            <td class="text-truncate">
                                                                 <div class="fw-semibold text-truncate">Acak data...</div>
                                                             </td>
-                                                            <td class="text-truncate kec-prize fw-semibold"
-                                                                style="max-width: 70px;">
-                                                                {{ form.prizeNames[(idx * form.winnersPerPage + row - 1) %
+                                                            <td class="text-truncate kec-prize fw-semibold">
+                                                                {{ form.prizeNames[(idx * form.winnersPerPage + row) %
                                                                     form.prizeNames.length] || '-' }}
                                                             </td>
+                                                        </template>
+                                                        <template v-else>
+                                                            <td v-if="form.winnersPerPage > 1">{{ row + 1 }}</td>
+                                                            <td class="fw-bold text-truncate">-</td>
+                                                            <td class="fw-semibold text-truncate">Belum teracak</td>
+                                                            <td class="text-truncate kec-prize fw-semibold">Belum teracak</td>
                                                         </template>
                                                     </tr>
                                                 </tbody>
@@ -450,43 +476,49 @@
                                 <div class="kec-grid"
                                     :class="{ 'kec-grid-single': form.samsats.length <= 1 }"
                                     :style="{ '--kec-cols': kecColumns }">
-                                    <div v-for="(kecId, idx) in form.samsats" :key="kecId" class="kec-item">
+                                    <div v-for="(samsat, idx) in form.samsats" :key="samsat" class="kec-item">
                                         <div class="kec-card p-2 h-100">
                                             <div
                                                 class="kec-card-head d-flex justify-content-between align-items-center pb-1 mb-1">
-                                                <span class="kec-title fs-xs text-truncate" style="max-width: 78%;">
-                                                    <i class="fa fa-map-marker-alt me-1"></i>{{ kecamatanName(kecId) }}
+                                                <span class="kec-title fs-xs text-truncate" :title="samsat">
+                                                    <i class="fa fa-map-marker-alt me-1"></i>{{ samsat }}
                                                 </span>
                                                 <span class="badge bg-primary fs-xs">{{ form.winnersPerPage }}
                                                     Pemenang</span>
                                             </div>
                                             <table class="table table-sm table-vcenter kec-table mb-0">
+                                                <colgroup>
+                                                    <col v-for="(width, column) in tableColumnWidths" :key="column"
+                                                        :style="{ width }">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th v-if="form.winnersPerPage > 1" style="width: 8%;">#</th>
-                                                        <th style="width: 25%;">No. Polisi</th>
-                                                        <th style="width: 42%;">Nama</th>
-                                                        <th style="width: 25%;">Hadiah</th>
+                                                        <th v-if="form.winnersPerPage > 1">#</th>
+                                                        <th>No. Polisi</th>
+                                                        <th>Nama</th>
+                                                        <th>Hadiah</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <tr v-for="(item, row) in winnersByKecamatan(kecId)"
-                                                        :key="item.id || row">
-                                                        <td v-if="form.winnersPerPage > 1">{{ row + 1 }}</td>
-                                                        <td class="fw-bold text-nowrap">{{ item.kodeWilayah }} {{
-                                                            item.angka }} {{ item.kodeSeri }}</td>
-                                                        <td class="text-truncate" style="max-width: 120px;">
-                                                            <div class="fw-semibold text-truncate">{{ item.nama ||
-                                                                'Belum teracak' }}</div>
-                                                        </td>
-                                                        <td class="text-truncate kec-prize fw-semibold"
-                                                            style="max-width: 70px;">
-                                                            {{ item.prize?.name || 'Belum teracak' }}</td>
-                                                    </tr>
-                                                    <tr v-if="winnersByKecamatan(kecId).length === 0">
-                                                        <td :colspan="form.winnersPerPage > 1 ? 4 : 3"
-                                                            class="text-center text-muted py-2">Belum diundi.
-                                                        </td>
+                                                    <tr v-for="(item, row) in rowsBySamsat[samsat] || []" :key="row">
+                                                        <template v-if="item">
+                                                            <td v-if="form.winnersPerPage > 1">{{ row + 1 }}</td>
+                                                            <td class="fw-bold text-truncate">
+                                                                {{ item.kodeWilayah }} {{ item.angka }} {{ item.kodeSeri }}
+                                                            </td>
+                                                            <td class="text-truncate">
+                                                                <div class="fw-semibold text-truncate">{{ item.nama ||
+                                                                    'Belum teracak' }}</div>
+                                                            </td>
+                                                            <td class="text-truncate kec-prize fw-semibold">
+                                                                {{ item.prize?.name || 'Belum teracak' }}</td>
+                                                        </template>
+                                                        <template v-else>
+                                                            <td v-if="form.winnersPerPage > 1">{{ row + 1 }}</td>
+                                                            <td class="fw-bold text-truncate">-</td>
+                                                            <td class="fw-semibold text-truncate">Belum teracak</td>
+                                                            <td class="text-truncate kec-prize fw-semibold">Belum teracak</td>
+                                                        </template>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -494,7 +526,7 @@
                                     </div>
                                 </div>
                                 <div v-if="form.samsats.length === 0" class="text-center text-muted py-3">
-                                    Belum ada kecamatan yang dipilih.
+                                    Belum ada Samsat yang dipilih.
                                 </div>
                             </div>
 
@@ -580,11 +612,13 @@
 
 .kec-item {
     flex: 0 0 100%;
+    min-width: 0;
 }
 
 @media (min-width: 768px) {
     .kec-item {
         flex: 0 0 calc((100% - (var(--kec-cols, 2) - 1) * 1rem) / var(--kec-cols, 2));
+        min-width: 0;
     }
 
     /* Bila hanya 1 kecamatan, tampilkan satu kartu di tengah */
@@ -601,6 +635,8 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.30);
     color: var(--kec-td-color, #1f2937);
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* Jarak tombol start dari kartu pengundian */
@@ -611,12 +647,30 @@
 
 .kec-card-head {
     border-bottom: 1px solid var(--kec-border, #e5e7eb);
+    min-width: 0;
+    min-height: 24px;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
 }
 
 .kec-title {
     color: var(--kec-title-color, #0d6efd);
     font-weight: 700;
     text-transform: uppercase;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.kec-card-head>.badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 88px;
+    white-space: nowrap;
 }
 
 .kec-prize {
@@ -624,6 +678,8 @@
 }
 
 .kec-table {
+    table-layout: fixed;
+    width: 100%;
     font-size: var(--kec-table-font, 0.72rem);
     line-height: 1.1;
     margin-bottom: 0;
@@ -637,6 +693,14 @@
     text-align: center;
     vertical-align: middle;
     padding: var(--kec-table-pad, 0.25rem);
+    height: var(--kec-head-height, 26px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.kec-table>tbody>tr {
+    height: var(--kec-row-height, 26px);
 }
 
 .kec-table>tbody>tr>td {
@@ -646,6 +710,16 @@
     border-color: var(--kec-border, #eef0f4);
     color: var(--kec-td-color, #1f2937);
     padding: var(--kec-table-pad, 0.25rem);
+    height: var(--kec-row-height, 26px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.kec-table>tbody>tr>td>div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .undian-grid {
@@ -926,56 +1000,101 @@ export default {
         // menimpa state sesi terbaru.
         let drawSession = 0;
 
-        // --- Wilayah & Pengaturan state ---
+        // --- Wilayah, koordinator & pengaturan state ---
         const wilayah = reactive({
             kabkota: inject('kabkota') || '',
-            drawMode: '',
+            plat: '',
+            label: '',
+            samsat: [],
             kecamatan: [],
-            kecamatanSamsat: {},
-            samsatIds: [],
             idLokasi: [],
             idLokasiMismatch: [],
             idLokasiTidakTerpakai: [],
             winnersPerPage: Number(inject('winnersPerPage')) || 5,
             error: '',
         });
-        const selectedKecamatan = ref([]);
+        const coordinatorMap = ref({});
+        const selectedCoordinator = ref('');
+        const selectedSamsats = ref([]);
         const selectedCategoryId = ref('');
         const selectedPrizeIds = ref([]);
         const prizeOptions = ref([]);
         const winnersPerPage = ref(wilayah.winnersPerPage || 5);
 
-        // Nama kecamatan berdasarkan id (id = kunci unik).
-        const kecamatanName = (id) => {
-            const found = wilayah.kecamatan.find(k => k.id === id);
-            return found ? found.nama : id;
+        const coordinatorKeys = computed(() => Object.keys(coordinatorMap.value));
+
+        const coordinatorLabel = (key) => {
+            return coordinatorMap.value[key]?.label || key;
         };
 
-        // Kecamatan yang sudah diundi (ditandai centang), disimpan di localStorage per wilayah.
-        const drawnKecamatan = ref([]);
-        const drawnStorageKey = () => `drawnKecamatan:${wilayah.kabkota || 'default'}`;
-        const isDrawn = (id) => drawnKecamatan.value.includes(id);
+        const selectedSamsatOptions = computed(() => {
+            return coordinatorMap.value[selectedCoordinator.value]?.samsat || [];
+        });
+
+        // Pilih koordinator: seluruh Samsat di bawahnya otomatis dipilih,
+        // sama seperti alur pengundian undianbapenda.
+        const onCoordinatorChange = () => {
+            winnersDetermined.value = false;
+            updateDisableTrigger();
+
+            if (selectedCoordinator.value && coordinatorMap.value[selectedCoordinator.value]) {
+                selectedSamsats.value = [...selectedSamsatOptions.value];
+            } else {
+                selectedSamsats.value = [];
+            }
+        };
+
+        const isAllSamsatSelected = computed(() => {
+            const currentSamsats = selectedSamsatOptions.value;
+
+            if (currentSamsats.length === 0) return false;
+
+            return currentSamsats.every(samsat => selectedSamsats.value.includes(samsat));
+        });
+
+        const toggleSelectAllSamsat = () => {
+            const currentSamsats = selectedSamsatOptions.value;
+
+            if (currentSamsats.length === 0) return;
+
+            if (isAllSamsatSelected.value) {
+                selectedSamsats.value = selectedSamsats.value.filter(s => !currentSamsats.includes(s));
+            } else {
+                const newSelection = [...selectedSamsats.value];
+                currentSamsats.forEach(s => {
+                    if (!newSelection.includes(s)) {
+                        newSelection.push(s);
+                    }
+                });
+                selectedSamsats.value = newSelection;
+            }
+        };
+
+        // Samsat yang sudah diundi (ditandai centang), disimpan di localStorage per wilayah.
+        const drawnSamsats = ref([]);
+        const drawnStorageKey = () => `drawnSamsat:${wilayah.kabkota || 'default'}`;
+        const isDrawn = (samsat) => drawnSamsats.value.includes(samsat);
 
         const loadDrawn = () => {
             try {
                 const raw = localStorage.getItem(drawnStorageKey());
-                drawnKecamatan.value = raw ? JSON.parse(raw) : [];
+                drawnSamsats.value = raw ? JSON.parse(raw) : [];
             } catch (e) {
-                drawnKecamatan.value = [];
+                drawnSamsats.value = [];
             }
         };
 
-        const markDrawn = (ids) => {
-            const set = new Set(drawnKecamatan.value);
-            ids.forEach(id => set.add(id));
-            drawnKecamatan.value = Array.from(set);
+        const markDrawn = (samsats) => {
+            const set = new Set(drawnSamsats.value);
+            samsats.forEach(samsat => set.add(samsat));
+            drawnSamsats.value = Array.from(set);
             try {
-                localStorage.setItem(drawnStorageKey(), JSON.stringify(drawnKecamatan.value));
+                localStorage.setItem(drawnStorageKey(), JSON.stringify(drawnSamsats.value));
             } catch (e) { /* abaikan */ }
         };
 
         const resetDrawn = () => {
-            drawnKecamatan.value = [];
+            drawnSamsats.value = [];
             try {
                 localStorage.removeItem(drawnStorageKey());
             } catch (e) { /* abaikan */ }
@@ -1114,6 +1233,7 @@ export default {
         // Tampilan tabel undian (ukuran & warna), tersimpan permanen di localStorage.
         const TABLE_DEFAULTS = {
             size: 100,
+            fontSize: 12,
             cardBg: '#ffffff',
             borderColor: '#e5e7eb',
             titleColor: '#0d6efd',
@@ -1130,6 +1250,7 @@ export default {
         };
 
         const tableSize = ref(Number(readStoredValue('undianTableSize', TABLE_DEFAULTS.size)) || TABLE_DEFAULTS.size);
+        const tableFontSize = ref(Number(readStoredValue('undianTableFontSize', TABLE_DEFAULTS.fontSize)) || TABLE_DEFAULTS.fontSize);
         const tableCardBg = ref(readStoredValue('undianTableCardBg', TABLE_DEFAULTS.cardBg));
         const tableBorderColor = ref(readStoredValue('undianTableBorderColor', TABLE_DEFAULTS.borderColor));
         const tableTitleColor = ref(readStoredValue('undianTableTitleColor', TABLE_DEFAULTS.titleColor));
@@ -1148,6 +1269,15 @@ export default {
             localStorage.setItem('undianTableSize', String(normalized));
         });
 
+        watch(tableFontSize, (value) => {
+            const normalized = Math.min(Math.max(Number(value) || TABLE_DEFAULTS.fontSize, 8), 28);
+            if (normalized !== value) {
+                tableFontSize.value = normalized;
+                return;
+            }
+            localStorage.setItem('undianTableFontSize', String(normalized));
+        });
+
         [
             [tableCardBg, 'undianTableCardBg'],
             [tableBorderColor, 'undianTableBorderColor'],
@@ -1163,10 +1293,15 @@ export default {
 
         const tableAppearanceStyle = computed(() => {
             const scale = Math.min(Math.max(Number(tableSize.value) || 100, 70), 180) / 100;
+            const fontSize = Math.min(Math.max(Number(tableFontSize.value) || TABLE_DEFAULTS.fontSize, 8), 28);
+            const padRem = 0.25 * scale;
+            const rowHeight = Math.max(26, Math.ceil(fontSize * 1.25 + padRem * 16 * 2 + 2));
 
             return {
-                '--kec-table-font': `${(0.72 * scale).toFixed(3)}rem`,
-                '--kec-table-pad': `${(0.25 * scale).toFixed(3)}rem`,
+                '--kec-table-font': `${fontSize}px`,
+                '--kec-table-pad': `${padRem.toFixed(3)}rem`,
+                '--kec-row-height': `${rowHeight}px`,
+                '--kec-head-height': `${rowHeight}px`,
                 '--kec-card-bg': tableCardBg.value,
                 '--kec-border': tableBorderColor.value,
                 '--kec-title-color': tableTitleColor.value,
@@ -1180,6 +1315,7 @@ export default {
 
         const resetTableAppearance = () => {
             tableSize.value = TABLE_DEFAULTS.size;
+            tableFontSize.value = TABLE_DEFAULTS.fontSize;
             tableCardBg.value = TABLE_DEFAULTS.cardBg;
             tableBorderColor.value = TABLE_DEFAULTS.borderColor;
             tableTitleColor.value = TABLE_DEFAULTS.titleColor;
@@ -1190,6 +1326,7 @@ export default {
             tablePrizeColor.value = TABLE_DEFAULTS.prizeColor;
 
             localStorage.setItem('undianTableSize', String(TABLE_DEFAULTS.size));
+            localStorage.setItem('undianTableFontSize', String(TABLE_DEFAULTS.fontSize));
             localStorage.setItem('undianTableCardBg', TABLE_DEFAULTS.cardBg);
             localStorage.setItem('undianTableBorderColor', TABLE_DEFAULTS.borderColor);
             localStorage.setItem('undianTableTitleColor', TABLE_DEFAULTS.titleColor);
@@ -1207,33 +1344,14 @@ export default {
             prizeNames: [],
             quantity: 0,
             winnersPerPage: 5,
-            samsatIdMap: {},
         });
 
         const hasSetup = computed(() => {
-            // Undian per kecamatan hanya aktif bila admin mengatur mode
-            // pengundian menjadi "kecamatan".
-            return wilayah.drawMode === 'kecamatan'
-                && form.samsats.length > 0
-                && form.prize_ids.length > 0;
+            return form.samsats.length > 0 && form.prize_ids.length > 0;
         });
-
-        const isAllKecamatanSelected = computed(() => {
-            if (wilayah.kecamatan.length === 0) return false;
-            return wilayah.kecamatan.every(kec => selectedKecamatan.value.includes(kec.id));
-        });
-
-        const toggleSelectAllKecamatan = () => {
-            if (wilayah.kecamatan.length === 0) return;
-            if (isAllKecamatanSelected.value) {
-                selectedKecamatan.value = [];
-            } else {
-                selectedKecamatan.value = wilayah.kecamatan.map(kec => kec.id);
-            }
-        };
 
         const requiredWinners = computed(() => {
-            return selectedKecamatan.value.length * (Number(winnersPerPage.value) || 0);
+            return selectedSamsats.value.length * (Number(winnersPerPage.value) || 0);
         });
 
         const totalSelectedStock = computed(() => {
@@ -1244,22 +1362,17 @@ export default {
         });
 
         const settingError = computed(() => {
-            if (!wilayah.drawMode) {
-                return 'Mode pengundian belum di-set. Atur terlebih dahulu di menu admin: Pengaturan Undian.';
-            }
-            if (wilayah.drawMode === 'global6') {
-                return 'Mode pengundian aktif adalah Global Semua Kecamatan (6 pemenang). Halaman undian per kecamatan tidak aktif.';
-            }
             if (wilayah.error) return wilayah.error;
             if (wilayah.idLokasiMismatch.length) {
                 return `APP_ID_LOKASI tidak cocok dengan mapping wilayah (ID lain: ${wilayah.idLokasiMismatch.join(', ')}). Periksa .env.`;
             }
-            if (!wilayah.kecamatan.length) return 'Daftar kecamatan belum tersedia. Periksa APP_KABKOTA di .env.';
-            if (selectedKecamatan.value.length === 0) return 'Pilih minimal 1 kecamatan.';
+            if (coordinatorKeys.value.length === 0) return 'Daftar koordinator belum tersedia. Periksa APP_KABKOTA di .env.';
+            if (!selectedCoordinator.value) return 'Pilih koordinator lokasi.';
+            if (selectedSamsats.value.length === 0) return 'Pilih minimal 1 Samsat.';
             if (!selectedCategoryId.value) return 'Pilih kategori hadiah.';
             if (selectedPrizeIds.value.length === 0) return 'Pilih minimal 1 hadiah.';
             if (!winnersPerPage.value || Number(winnersPerPage.value) < 1) {
-                return 'Jumlah pemenang per kecamatan minimal 1.';
+                return 'Jumlah pemenang per Samsat minimal 1.';
             }
             if (totalSelectedStock.value < requiredWinners.value) {
                 return `Stok hadiah (${totalSelectedStock.value}) kurang dari pemenang yang dibutuhkan (${requiredWinners.value}).`;
@@ -1270,8 +1383,27 @@ export default {
         const undianList = ref([]);
         const winnerList = ref([]);
 
-        const perKecamatanRows = computed(() => {
-            return Array.from({ length: Number(form.winnersPerPage) || 0 }, (_, i) => i + 1);
+        // Lebar kolom tetap agar tabel tidak berubah ukuran saat teks animasi
+        // (nomor polisi acak) berganti-ganti.
+        const tableColumnWidths = computed(() => {
+            return Number(form.winnersPerPage) > 1
+                ? ['8%', '25%', '42%', '25%']
+                : ['28%', '44%', '28%'];
+        });
+
+        // Selalu kembalikan tepat winnersPerPage baris per Samsat, baik saat
+        // belum diundi, sedang mengacak, maupun setelah pemenang ditampilkan.
+        const rowsBySamsat = computed(() => {
+            const per = Number(form.winnersPerPage) || 0;
+            const map = {};
+
+            form.samsats.forEach((samsat, index) => {
+                map[samsat] = Array.from({ length: per }, (_, row) => {
+                    return undianList.value[index * per + row] || null;
+                });
+            });
+
+            return map;
         });
 
         // Jumlah kolom kartu agar tersusun seimbang (± 2 baris):
@@ -1306,10 +1438,6 @@ export default {
                     prize: { id: null, name: 'Belum teracak' }
                 });
             }
-        };
-
-        const winnersByKecamatan = (kec) => {
-            return undianList.value.filter(u => u.lokasi === kec);
         };
 
         const getRandomLetter = (length) => {
@@ -1386,7 +1514,6 @@ export default {
                     prize_ids: form.prize_ids,
                     samsats: form.samsats,
                     per_samsat: form.winnersPerPage,
-                    samsat_ids: form.samsatIdMap,
                 }, {
                     signal: controller.signal,
                     timeout: DRAW_REQUEST_TIMEOUT,
@@ -1532,10 +1659,10 @@ export default {
                 undianList.value.forEach(row => stopDrawingRow(row));
                 parseWinner();
                 markDrawn(form.samsats);
-                // Setelah diundi, kecamatan tersebut otomatis tidak terpilih lagi
-                // di sidebar agar undian berikutnya tidak mengulang kecamatan yang sama.
-                selectedKecamatan.value = selectedKecamatan.value.filter(
-                    id => !form.samsats.includes(id)
+                // Setelah diundi, Samsat tersebut otomatis tidak terpilih lagi
+                // di sidebar agar undian berikutnya tidak mengulang Samsat yang sama.
+                selectedSamsats.value = selectedSamsats.value.filter(
+                    samsat => !form.samsats.includes(samsat)
                 );
                 drawing.value = false;
                 winnersDetermined.value = true;
@@ -1578,19 +1705,11 @@ export default {
                 return p ? p.name : '';
             }).filter(Boolean);
 
-            form.samsats = [...selectedKecamatan.value];
+            form.samsats = [...selectedSamsats.value];
             form.prize_ids = [...selectedPrizeIds.value];
             form.prizeNames = names;
             form.winnersPerPage = Number(winnersPerPage.value) || 1;
             form.quantity = form.samsats.length * form.winnersPerPage;
-
-            // Petakan tiap kecamatan (id) ke Samsat-nya.
-            // Kecamatan dalam satu Kabupaten/Kota bisa berada di Samsat berbeda.
-            form.samsatIdMap = form.samsats.reduce((map, kecId) => {
-                const samsatId = wilayah.kecamatanSamsat?.[kecId];
-                map[kecId] = samsatId ? [samsatId] : wilayah.samsatIds;
-                return map;
-            }, {});
 
             const el = document.getElementById('page-container');
             if (el) {
@@ -1636,7 +1755,8 @@ export default {
             try {
                 const response = await axios.get('/api/get-data/wilayah');
                 wilayah.kabkota = response.data.kabkota || wilayah.kabkota;
-                wilayah.drawMode = response.data.draw_mode || '';
+                wilayah.plat = response.data.plat || '';
+                wilayah.label = response.data.label || '';
 
                 // Kode plat daerah aktif untuk animasi pengundian.
                 const platKode = response.data?.plat_kode;
@@ -1644,9 +1764,8 @@ export default {
                     platDaerah.value = platKode;
                 }
 
+                wilayah.samsat = response.data.samsat || [];
                 wilayah.kecamatan = response.data.kecamatan || [];
-                wilayah.kecamatanSamsat = response.data.kecamatan_samsat || {};
-                wilayah.samsatIds = response.data.samsat_ids || [];
                 wilayah.idLokasi = response.data.id_lokasi || [];
                 wilayah.idLokasiMismatch = response.data.id_lokasi_mismatch || [];
                 wilayah.idLokasiTidakTerpakai = response.data.id_lokasi_tidak_terpakai || [];
@@ -1663,6 +1782,27 @@ export default {
             } catch (error) {
                 wilayah.error = 'Gagal memuat data wilayah.';
                 console.error('Gagal memuat data wilayah:', error);
+            }
+        };
+
+        /**
+         * Mapping koordinator (Plat) -> daftar Samsat untuk halaman undian
+         * biasa, mengikuti alur undianbapenda.
+         */
+        const getCoordinatorMap = async () => {
+            try {
+                const response = await axios.get('/api/get-data/coordinator');
+                coordinatorMap.value = response.data || {};
+
+                // Bila wilayah hanya punya satu koordinator, langsung pilih
+                // agar operator tidak perlu memilih ulang.
+                const keys = Object.keys(coordinatorMap.value);
+                if (keys.length === 1) {
+                    selectedCoordinator.value = keys[0];
+                    onCoordinatorChange();
+                }
+            } catch (error) {
+                console.error('Gagal memuat data koordinator:', error);
             }
         };
 
@@ -1688,6 +1828,7 @@ export default {
             document.addEventListener('click', closeDisplaySettingsOnOutsideClick);
             getOptionsPrize();
             getWilayah();
+            getCoordinatorMap();
             startKeepAlive();
         });
 
@@ -1707,14 +1848,19 @@ export default {
             platJateng,
             platDaerah,
             wilayah,
-            selectedKecamatan,
-            kecamatanName,
-            drawnKecamatan,
+            coordinatorMap,
+            coordinatorKeys,
+            selectedCoordinator,
+            selectedSamsats,
+            selectedSamsatOptions,
+            coordinatorLabel,
+            onCoordinatorChange,
+            isAllSamsatSelected,
+            toggleSelectAllSamsat,
+            drawnSamsats,
             isDrawn,
             resetDrawn,
             winnersPerPage,
-            isAllKecamatanSelected,
-            toggleSelectAllKecamatan,
             requiredWinners,
             totalSelectedStock,
             settingError,
@@ -1722,9 +1868,9 @@ export default {
             form,
             hasSetup,
             undianList,
-            perKecamatanRows,
+            tableColumnWidths,
+            rowsBySamsat,
             kecColumns,
-            winnersByKecamatan,
             startDrawingRow,
             stopDrawingRow,
             drawHandle,
@@ -1752,6 +1898,7 @@ export default {
             undianTopOffset,
             resetUndianTopOffset,
             tableSize,
+            tableFontSize,
             tableCardBg,
             tableBorderColor,
             tableTitleColor,

@@ -23,19 +23,36 @@ class ApiController extends Controller
         return response()->json($locations, 200);
     }
 
+    /**
+     * Mapping koordinator (Plat) -> label wilayah + daftar Samsat.
+     *
+     * Format respons mengikuti aplikasi undianbapenda:
+     *
+     *     {
+     *       "Plat H": {
+     *         "label": "Semarang Raya",
+     *         "samsat": ["Semarang I", "Semarang II", ...]
+     *       },
+     *       ...
+     *     }
+     *
+     * Samsat Pembantu digabung dengan induknya, mis. "Blora → Cepu".
+     */
     public function coordinatorMapping()
     {
-        $mapping = include config_path('coordinator.php');
-        return response()->json($mapping, 200);
+        return response()->json(Wilayah::coordinatorOptions(), 200);
     }
 
     /**
-     * Daftar Kecamatan berdasarkan Kabupaten/Kota aktif yang diatur di .env.
-     * Sumber data: config/coordinator.php.
+     * Informasi wilayah untuk halaman undian.
+     *
+     * Bila APP_KABKOTA kosong, data yang dikembalikan mencakup seluruh
+     * Jawa Tengah (semua koordinator/Samsat).
      */
     public function wilayah()
     {
-        $active = config('wilayah.active');
+        $active = trim((string) config('wilayah.active', ''));
+        $isProvince = $active === '';
         $winnersPerPage = (int) config('wilayah.winners_per_page', 5);
         $idLokasi = collect(config('wilayah.id_lokasi', []))
             ->map(fn($id) => (int) $id)
@@ -44,38 +61,31 @@ class ApiController extends Controller
             ->values()
             ->all();
 
-        $info = Wilayah::find($active);
+        $info = $isProvince ? Wilayah::province() : Wilayah::find($active);
 
+        // APP_KABKOTA yang tidak ditemukan tidak boleh menghentikan aplikasi;
+        // jatuh kembali ke cakupan seluruh Jawa Tengah.
         if (!$info['found']) {
-            return response()->json([
-                'kabkota'          => $active,
-                'kecamatan'        => [],
-                'kecamatan_samsat' => (object) [],
-                'samsat_ids'       => [],
-                'id_lokasi'        => $idLokasi,
-                'id_lokasi_mismatch' => [],
-                'id_lokasi_tidak_terpakai' => [],
-                'winners_per_page' => $winnersPerPage,
-                'draw_mode'        => (string) config('wilayah.draw_mode', ''),
-                'global_roda2'     => (int) config('wilayah.global.roda2', 5),
-                'global_roda4'     => (int) config('wilayah.global.roda4', 1),
-                'error'            => "Kabupaten/Kota \"{$active}\" belum terdaftar pada mapping wilayah. "
-                    . 'Silakan sesuaikan nilai APP_KABKOTA pada file .env.',
-            ], 200);
+            $isProvince = true;
+            $info = Wilayah::province();
         }
 
-        // Validasi silang APP_ID_LOKASI dengan mapping Samsat wilayah aktif.
-        $idLokasiMismatch = empty($idLokasi)
-            ? []
-            : array_values(array_diff($info['samsat_ids'], $idLokasi));
-        $idLokasiTidakTerpakai = empty($idLokasi)
-            ? []
-            : array_values(array_diff($idLokasi, $info['samsat_ids']));
+        // Validasi silang APP_ID_LOKASI hanya relevan saat dibatasi ke satu
+        // Kabupaten/Kota.
+        $idLokasiMismatch = [];
+        $idLokasiTidakTerpakai = [];
+
+        if (!$isProvince && !empty($idLokasi)) {
+            $idLokasiMismatch = array_values(array_diff($info['samsat_ids'], $idLokasi));
+            $idLokasiTidakTerpakai = array_values(array_diff($idLokasi, $info['samsat_ids']));
+        }
 
         return response()->json([
+            'scope'            => $isProvince ? 'province' : 'kabkota',
             'kabkota'          => $info['name'],
-            'label'            => $info['label'],
+            'label'            => $isProvince ? config('wilayah.province_name', 'Provinsi Jawa Tengah') : $info['label'],
             'plat'             => $info['plat'],
+            'samsat'           => array_keys($info['samsat']),
             'kecamatan'        => $info['kecamatan'],
             'kecamatan_samsat' => $info['kecamatan_samsat'],
             'samsat_ids'       => $info['samsat_ids'],
@@ -85,15 +95,10 @@ class ApiController extends Controller
             'total_kecamatan'  => $info['kecamatan_count'],
             'total_kelurahan'  => $info['kelurahan_count'],
             'winners_per_page' => $winnersPerPage,
-            // Mode pengundian aktif ('' = belum di-set admin).
-            'draw_mode'        => (string) config('wilayah.draw_mode', ''),
-            // Kode plat daerah aktif untuk animasi pengundian (mis. "AD").
-            'plat_kode'        => self::extractPlateCode($info['plat']),
-            // Komposisi pemenang mode global (semua kecamatan), diatur dari admin.
-            'global_roda2'     => (int) config('wilayah.global.roda2', 5),
-            'global_roda4'     => (int) config('wilayah.global.roda4', 1),
-            // Jumlah pemenang total per pengundian mode global (= roda 2 + roda 4).
-            'global_total'     => (int) config('wilayah.global.total', 6),
+            // Kode plat untuk animasi pengundian.
+            'plat_kode'        => $isProvince
+                ? ($info['plats'] ?? [])
+                : self::extractPlateCode($info['plat']),
         ], 200);
     }
 

@@ -1,5 +1,9 @@
 # Database Seeders - Undian Kendaraan
 
+> Untuk mengimpor data kendaraan riil dari CSV Bapenda
+> (`jurnal_laporan.csv`), gunakan command `kendaraan:import-jurnal`.
+> Panduan lengkap: [`JURNAL_IMPORT_GUIDE.md`](JURNAL_IMPORT_GUIDE.md).
+
 ## Overview
 
 Database seeders sudah dikonfigurasi untuk mengimport data dari SQL dump yang Anda berikan. Seeders ini akan otomatis membuat data awal untuk sistem undian kendaraan.

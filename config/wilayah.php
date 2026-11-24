@@ -5,59 +5,51 @@
 | Konfigurasi Wilayah Undian
 |--------------------------------------------------------------------------
 |
-| Aplikasi ini dipakai oleh seluruh Kabupaten/Kota di Provinsi Jawa Tengah.
+| Aplikasi ini dipakai untuk seluruh Provinsi Jawa Tengah.
 |
-| Wilayah aktif diatur langsung pada file .env:
+| Daftar lengkap koordinator (Plat), Samsat, kecamatan, dan kelurahan
+| bersumber dari file config/coordinator.php yang dibaca melalui
+| App\Support\Wilayah.
 |
-|     APP_KABKOTA="Kabupaten Boyolali"
-|     APP_ID_LOKASI=12
+| Alur pengundian aplikasi:
+| - Undian biasa : per koordinator/wilayah (Samsat), di halaman utama.
+| - Grand Prize  : global semua kecamatan, jumlah pemenang fleksibel.
 |
-| Daftar lengkap Kabupaten/Kota, kecamatan, dan kelurahan bersumber dari
-| file config/coordinator.php (mapping Plat -> Samsat -> Kota/Kabupaten ->
-| Kecamatan -> Kelurahan) yang dibaca melalui App\Support\Wilayah.
+| Tidak ada pemilihan mode pengundian di admin. Nilai .env di bawah
+| bersifat opsional dan langsung dipakai oleh halaman undian.
 |
-| Nama pada APP_KABKOTA harus sama dengan salah satu nilai 'kota' pada
-| config/coordinator.php (pencocokan tidak membedakan huruf besar/kecil).
-|
-| Pengaturan lain (mode pengundian, komposisi pemenang global) diatur dari
-| halaman admin (Filament > Pengaturan Undian) melalui
-| App\Support\UndianSettings.
-|
-| Catatan: jangan jalankan `php artisan config:cache`, karena nilai dari
-| file pengaturan akan terkunci pada cache config.
+| Catatan: jangan jalankan `php artisan config:cache` setelah mengubah
+| .env tanpa menjalankan `php artisan config:clear` terlebih dahulu.
 |
 */
-
-$undianSettings = App\Support\UndianSettings::all();
 
 return [
 
     /*
     |--------------------------------------------------------------------------
-    | Mode Pengundian
+    | Wilayah Aktif (opsional)
     |--------------------------------------------------------------------------
     |
-    | ''          -> belum di-set (admin wajib mengatur dulu; mengundi ditolak)
-    | 'kecamatan' -> undian per kecamatan (halaman undian biasa + grand prize)
-    | 'global6'   -> global semua kecamatan dengan komposisi pemenang
+    | Kosongkan APP_KABKOTA untuk memakai seluruh Jawa Tengah (pilihan
+    | koordinator & Samsat dari semua wilayah). Isi hanya bila aplikasi
+    | sengaja dibatasi ke satu Kabupaten/Kota.
     |
     */
-    'draw_mode' => $undianSettings['draw_mode'],
+    'active' => trim((string) env('APP_KABKOTA', '')),
 
-    // Kabupaten/Kota aktif (diatur langsung di .env)
-    'active' => env('APP_KABKOTA', ''),
+    'province_name' => 'Provinsi Jawa Tengah',
 
     /*
     |--------------------------------------------------------------------------
-    | ID Lokasi / Samsat (validasi silang)
+    | ID Lokasi / Samsat (validasi silang, opsional)
     |--------------------------------------------------------------------------
     |
-    | Nilai kolom kendaraans.id_lokasi untuk wilayah aktif. Dipakai sebagai
-    | pengaman agar aplikasi tidak memanggil SP getWinner dengan ID Samsat
-    | yang salah. Contoh: Kabupaten Boyolali = 12.
+    | Nilai kolom kendaraans.id_lokasi yang diizinkan. Kosongkan untuk
+    | seluruh Jawa Tengah. Bila diisi, pengundian hanya boleh memakai
+    | ID Samsat tersebut.
     |
     | Bila wilayah memiliki lebih dari satu Samsat, isi dengan pemisah koma,
-    | mis. APP_ID_LOKASI=1,2,3. Kosongkan bila tidak ingin validasi otomatis.
+    | mis. APP_ID_LOKASI=1,2,3.
     |
     */
     'id_lokasi' => array_values(array_unique(array_filter(array_map(
@@ -65,24 +57,7 @@ return [
         explode(',', (string) env('APP_ID_LOKASI', ''))
     )))),
 
-    // Jumlah pemenang per lokasi/kecamatan untuk 1 halaman (bawaan)
-    'winners_per_page' => $undianSettings['winners_per_page'],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Mode Global (Semua Kecamatan) - Komposisi Pemenang
-    |--------------------------------------------------------------------------
-    |
-    | Dipakai halaman Grand Prize (undian global semua kecamatan):
-    | jumlah pemenang roda 2 dan roda 4. Total pemenang selalu =
-    | roda 2 + roda 4 (default 5 + 1 = 6). Fleksibel, diubah dari halaman
-    | admin (Filament > Pengaturan Undian).
-    |
-    */
-    'global' => [
-        'roda2' => $undianSettings['global_roda2'],
-        'roda4' => $undianSettings['global_roda4'],
-        'total' => $undianSettings['global_total'],
-    ],
+    // Jumlah pemenang per lokasi/Samsat untuk 1 halaman (bawaan)
+    'winners_per_page' => max(1, (int) env('APP_WINNERS_PER_PAGE', 5)),
 
 ];

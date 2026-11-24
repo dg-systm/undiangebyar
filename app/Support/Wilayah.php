@@ -147,15 +147,193 @@ class Wilayah
     }
 
     /**
+     * Daftar koordinator lokasi dengan format seperti aplikasi undianbapenda:
+     * label wilayah + daftar Samsat (Samsat Pembantu digabung ke induknya
+     * dengan format "Induk → Pembantu").
+     *
+     * @return array<string, array{label: string, samsat: array<int, string>}>
+     */
+    public static function coordinatorOptions(): array
+    {
+        $options = [];
+
+        foreach (static::mapping() as $plat => $info) {
+            $parents = [];
+            $children = [];
+
+            foreach (($info['samsat'] ?? []) as $samsatName => $samsat) {
+                $displayName = static::samsatDisplayName($samsatName);
+                $induk = $samsat['induk'] ?? null;
+
+                if (!empty($induk)) {
+                    $children[$induk][] = $displayName;
+                } else {
+                    $parents[$samsatName] = $displayName;
+                }
+            }
+
+            $samsats = [];
+
+            foreach ($parents as $samsatName => $displayName) {
+                $subSamsats = $children[$samsatName] ?? [];
+
+                $samsats[] = empty($subSamsats)
+                    ? $displayName
+                    : $displayName . ' → ' . implode(', ', $subSamsats);
+
+                unset($children[$samsatName]);
+            }
+
+            // Samsat Pembantu yang induknya tidak ada di koordinator ini
+            // tetap ditampilkan agar tidak hilang dari pilihan.
+            foreach ($children as $subSamsats) {
+                foreach ($subSamsats as $subSamsat) {
+                    $samsats[] = $subSamsat;
+                }
+            }
+
+            $options[$plat] = [
+                'label'  => $info['label'] ?? $plat,
+                'samsat' => $samsats,
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * Nama Samsat untuk tampilan (mis. "SEMARANG I" -> "Semarang I").
+     * Angka romawi tetap huruf besar (I, II, III).
+     */
+    protected static function samsatDisplayName(string $name): string
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $display = [];
+
+        foreach ($parts as $part) {
+            $upper = strtoupper($part);
+
+            if (preg_match('/^[IVXLCDM]+$/', $upper)) {
+                $display[] = $upper;
+            } else {
+                $display[] = mb_convert_case(mb_strtolower($part, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        return implode(' ', $display);
+    }
+
+    /**
+     * Data agregat seluruh Jawa Tengah (semua koordinator/Samsat).
+     *
+     * Dipakai bila aplikasi tidak dibatasi ke satu Kabupaten/Kota
+     * (APP_KABKOTA kosong).
+     *
+     * @return array{
+     *     name: string,
+     *     found: bool,
+     *     plat: null,
+     *     label: string,
+     *     samsat: array,
+     *     samsat_ids: array<int, int>,
+     *     kecamatan: array<int, array{id: string, nama: string, samsat_id: ?int, samsat: string}>,
+     *     kecamatan_samsat: array<string, int>,
+     *     kecamatan_count: int,
+     *     kelurahan_count: int,
+     *     plats: array<int, string>
+     * }
+     */
+    public static function province(): array
+    {
+        $result = [
+            'name'             => 'Jawa Tengah',
+            'found'            => true,
+            'plat'             => null,
+            'label'            => 'Provinsi Jawa Tengah',
+            'samsat'           => [],
+            'samsat_ids'       => [],
+            'kecamatan'        => [],
+            'kecamatan_samsat' => [],
+            'kecamatan_count'  => 0,
+            'kelurahan_count'  => 0,
+            'plats'            => [],
+        ];
+
+        $kecamatanByName = [];
+        $kelurahanSeen = [];
+
+        foreach (static::mapping() as $plat => $info) {
+            $result['plats'] = array_merge($result['plats'], static::plateCodesFromLabel($plat));
+
+            foreach (($info['samsat'] ?? []) as $samsatName => $samsat) {
+                $result['samsat'][$samsatName] = $samsat;
+
+                $idLokasi = isset($samsat['id_lokasi']) ? (int) $samsat['id_lokasi'] : null;
+
+                if ($idLokasi !== null && !in_array($idLokasi, $result['samsat_ids'], true)) {
+                    $result['samsat_ids'][] = $idLokasi;
+                }
+
+                foreach (($samsat['kecamatan'] ?? []) as $kecId => $kec) {
+                    $kecId = (string) $kecId;
+                    $kecName = $kec['nama'] ?? $kecId;
+                    $kecNorm = static::normalize($kecName);
+
+                    // Dedupe berdasarkan nama: Samsat Pembantu dapat
+                    // mengulang kecamatan yang sama dengan ID berbeda.
+                    if (!isset($kecamatanByName[$kecNorm])) {
+                        $kecamatanByName[$kecNorm] = [
+                            'id'        => $kecId,
+                            'nama'      => $kecName,
+                            'samsat_id' => $idLokasi,
+                            'samsat'    => $samsatName,
+                        ];
+
+                        if ($idLokasi !== null) {
+                            $result['kecamatan_samsat'][$kecId] = $idLokasi;
+                        }
+                    }
+
+                    foreach (($kec['kelurahan'] ?? []) as $kelName) {
+                        $key = $kecNorm . '|' . static::normalize($kelName);
+                        $kelurahanSeen[$key] = true;
+                    }
+                }
+            }
+        }
+
+        $kecamatan = array_values($kecamatanByName);
+        usort($kecamatan, fn ($a, $b) => strcmp((string) $a['id'], (string) $b['id']));
+
+        $result['kecamatan'] = $kecamatan;
+        $result['kecamatan_count'] = count($kecamatan);
+        $result['kelurahan_count'] = count($kelurahanSeen);
+        $result['plats'] = array_values(array_unique($result['plats']));
+
+        sort($result['samsat_ids']);
+
+        return $result;
+    }
+
+    /**
      * Kode plat daerah aktif (mis. "Plat AD" -> ["AD"]) untuk animasi
      * pengundian. Sumber: mapping wilayah berdasarkan Kabupaten/Kota aktif
      * (.env APP_KABKOTA).
+     *
+     * Bila APP_KABKOTA kosong (mode seluruh Jawa Tengah), semua kode plat
+     * dikembalikan.
      *
      * @return array<int, string>
      */
     public static function plateCodes(?string $kabkota = null): array
     {
-        $info = static::find($kabkota ?? config('wilayah.active'));
+        $kabkota = $kabkota ?? config('wilayah.active');
+
+        if (trim((string) $kabkota) === '') {
+            return static::province()['plats'];
+        }
+
+        $info = static::find($kabkota);
 
         return static::plateCodesFromLabel($info['plat'] ?? null);
     }

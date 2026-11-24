@@ -5,13 +5,21 @@ namespace App\Support;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Definisi stored procedure getWinner.
+ * Definisi stored procedure pengundian.
  *
  * Signature SP (harus sama dengan database undian_samsat):
  *   getWinner(@id_lokasi_samsat INT, @id_kecamatan VARCHAR(10), @length INT = 5)
+ *   getWinnerBbn(@id_lokasi_samsat INT, @id_kecamatan VARCHAR(10), @length INT = 5)
  *
  * - id_lokasi_samsat = 999  -> mode global (Grand Prize), id_kecamatan diabaikan.
  * - id_kecamatan = ''       -> semua kecamatan pada Samsat tersebut.
+ *
+ * Catatan performa:
+ * Sebelumnya SQL Server mengambil sampel ID acak dari seluruh tabel lalu
+ * memfilternya berdasarkan Samsat. Cara itu bisa mengembalikan lebih sedikit
+ * kendaraan (bahkan nol) untuk Samsat kecil. Versi ini memfilter dulu baru
+ * mengacak dengan ORDER BY NEWID(), sehingga hasil selalu diambil dari
+ * kumpulan kendaraan yang benar-benar memenuhi syarat.
  */
 class GetWinnerProcedure
 {
@@ -19,10 +27,16 @@ class GetWinnerProcedure
     {
         $driver ??= DB::connection()->getDriverName();
 
-        DB::unprepared(match ($driver) {
-            'sqlsrv' => static::sqlServer(),
-            default  => static::mySql(),
-        });
+        if ($driver === 'sqlsrv') {
+            static::drop($driver);
+            DB::unprepared(static::sqlServer());
+            DB::unprepared(static::sqlServerBbn());
+
+            return;
+        }
+
+        static::drop($driver);
+        DB::unprepared(static::mySql());
     }
 
     public static function drop(?string $driver = null): void
@@ -31,6 +45,7 @@ class GetWinnerProcedure
 
         if ($driver === 'sqlsrv') {
             DB::unprepared("IF OBJECT_ID('dbo.getWinner', 'P') IS NOT NULL DROP PROCEDURE dbo.getWinner");
+            DB::unprepared("IF OBJECT_ID('dbo.getWinnerBbn', 'P') IS NOT NULL DROP PROCEDURE dbo.getWinnerBbn");
 
             return;
         }
@@ -49,49 +64,119 @@ class GetWinnerProcedure
             BEGIN
                 SET NOCOUNT ON;
 
+                IF @length IS NULL OR @length < 1
+                    SET @length = 5;
+
                 IF @id_lokasi_samsat = 999
                     BEGIN
                         SELECT TOP (@length)
-                            [id]
-                            ,[id_kendaraan]
-                            ,[no_polisi]
-                            ,roda
-                            ,[nama]
-                            ,[alamat]
-                            ,lokasi
-                            ,id_kecamatan
-                            ,id_kelurahan
-                        FROM [dbo].[kendaraans]
-                        WHERE id IN (
-                            SELECT TOP (1000)
-                                FLOOR(RAND(CHECKSUM(NEWID())) * (SELECT TOP 1 id FROM kendaraans ORDER BY id DESC)) + 1
-                            FROM sys.all_objects
+                            k.[id]
+                            ,k.[id_kendaraan]
+                            ,k.[no_polisi]
+                            ,k.[roda]
+                            ,k.[nama]
+                            ,k.[alamat]
+                            ,k.[lokasi]
+                            ,k.[id_kecamatan]
+                            ,k.[id_kelurahan]
+                        FROM [dbo].[kendaraans] AS k
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM [dbo].[winners] AS w
+                            WHERE w.[id_kendaraan] = k.[id_kendaraan]
                         )
-                        AND id_kendaraan NOT IN (SELECT id_kendaraan FROM winners)
-                        AND id_kendaraan NOT IN (SELECT id FROM grand_prizes)
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM [dbo].[grand_prizes] AS g
+                            WHERE g.[id] = TRY_CAST(k.[id_kendaraan] AS BIGINT)
+                        )
+                        ORDER BY NEWID();
                     END
                 ELSE
                     BEGIN
-                        SELECT TOP (@length) [id]
-                            ,[id_kendaraan]
-                            ,[no_polisi]
-                            ,roda
-                            ,[nama]
-                            ,[alamat]
-                            ,lokasi
-                            ,id_kecamatan
-                            ,id_kelurahan
-                        FROM [dbo].[kendaraans]
-                        WHERE id_lokasi = @id_lokasi_samsat
-                            AND id_kecamatan LIKE IIF(@id_kecamatan = '', '%', @id_kecamatan)
-                            AND id_kendaraan NOT IN (SELECT id_kendaraan FROM winners)
-                            AND id_kendaraan NOT IN (SELECT id FROM grand_prizes)
-                            AND id IN (
-                                SELECT
-                                    FLOOR(RAND(CHECKSUM(NEWID())) * (SELECT TOP 1 id FROM kendaraans ORDER BY id DESC)) + 1
-                                FROM sys.all_objects
+                        SELECT TOP (@length)
+                            k.[id]
+                            ,k.[id_kendaraan]
+                            ,k.[no_polisi]
+                            ,k.[roda]
+                            ,k.[nama]
+                            ,k.[alamat]
+                            ,k.[lokasi]
+                            ,k.[id_kecamatan]
+                            ,k.[id_kelurahan]
+                        FROM [dbo].[kendaraans] AS k
+                        WHERE k.[id_lokasi] = @id_lokasi_samsat
+                            AND (
+                                @id_kecamatan IS NULL
+                                OR @id_kecamatan = ''
+                                OR k.[id_kecamatan] LIKE @id_kecamatan
                             )
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM [dbo].[winners] AS w
+                                WHERE w.[id_kendaraan] = k.[id_kendaraan]
+                            )
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM [dbo].[grand_prizes] AS g
+                                WHERE g.[id] = TRY_CAST(k.[id_kendaraan] AS BIGINT)
+                            )
+                        ORDER BY NEWID();
                     END
+            END";
+    }
+
+    /**
+     * Pengundian khusus kategori BBNKB: hanya kendaraan dengan
+     * id_pendaftaran = 1 (pendaftaran baru) yang boleh ikut diundi.
+     */
+    public static function sqlServerBbn(): string
+    {
+        return "
+            CREATE PROCEDURE [dbo].[getWinnerBbn]
+                @id_lokasi_samsat INT
+                ,@id_kecamatan VARCHAR(10)
+                ,@length INT = 5
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+
+                IF @length IS NULL OR @length < 1
+                    SET @length = 5;
+
+                SELECT TOP (@length)
+                    k.[id]
+                    ,k.[id_kendaraan]
+                    ,k.[no_polisi]
+                    ,k.[roda]
+                    ,k.[nama]
+                    ,k.[alamat]
+                    ,k.[lokasi]
+                    ,k.[id_kecamatan]
+                    ,k.[id_kelurahan]
+                FROM [dbo].[kendaraans] AS k
+                WHERE (
+                        @id_lokasi_samsat = 999
+                        OR k.[id_lokasi] = @id_lokasi_samsat
+                    )
+                    AND (
+                        @id_lokasi_samsat = 999
+                        OR @id_kecamatan IS NULL
+                        OR @id_kecamatan = ''
+                        OR k.[id_kecamatan] LIKE @id_kecamatan
+                    )
+                    AND k.[id_pendaftaran] = 1
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM [dbo].[winners] AS w
+                        WHERE w.[id_kendaraan] = k.[id_kendaraan]
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM [dbo].[grand_prizes] AS g
+                        WHERE g.[id] = TRY_CAST(k.[id_kendaraan] AS BIGINT)
+                    )
+                ORDER BY NEWID();
             END";
     }
 
@@ -122,15 +207,9 @@ class GetWinnerProcedure
                             id_kecamatan,
                             id_kelurahan
                         FROM kendaraans
-                        WHERE id IN (
-                            SELECT id FROM (
-                                SELECT FLOOR(RAND() * (SELECT id FROM kendaraans ORDER BY id DESC LIMIT 1)) + 1 AS rand_id
-                                FROM kendaraans
-                                LIMIT 1000
-                            ) AS temp_rand
-                        )
-                        AND id_kendaraan NOT IN (SELECT id_kendaraan FROM winners)
+                        WHERE id_kendaraan NOT IN (SELECT id_kendaraan FROM winners)
                         AND id_kendaraan NOT IN (SELECT id FROM grand_prizes)
+                        ORDER BY RAND()
                         LIMIT ?';
 
                     PREPARE stmt FROM @sql;

@@ -12,7 +12,7 @@ class Draw extends Model
         'prize_id',  // nullable for multi-prize draws
         'quantity',
         'prize_category_id',
-        'is_global', // true = undian grand prize (global), false = undian biasa per kecamatan
+        'is_global', // true = undian grand prize (global), false = undian biasa per Samsat/wilayah
     ];
 
     public function prize()

@@ -47,6 +47,7 @@ return [
     '44' => 'Tanjung',
     '45' => 'Bagelen',
     '46' => 'Baturetno',
+    '52' => 'Bandongan',
     '53' => 'Delanggu',
     '999' => 'Bapenda Provinsi Jawa Tengah'
 ];

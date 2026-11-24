@@ -17,7 +17,7 @@
                 </div>
 
                 <div v-if="mode === 'page'" class="pv-body" :style="previewStyle">
-                    <!-- Variant undian biasa: grid kartu per kecamatan -->
+                    <!-- Variant undian biasa: grid kartu per Samsat -->
                     <div v-if="variant === 'undian'" class="pv-grid">
                         <div v-for="card in 2" :key="card" class="pv-card">
                             <div class="pv-card-head">

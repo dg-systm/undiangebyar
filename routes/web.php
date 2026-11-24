@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\DownloadController;
-use App\Support\UndianSettings;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,12 +15,6 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    // Mode global custom (6 pemenang): hanya ada 1 halaman undian,
-    // sehingga halaman undian per kecamatan diarahkan ke Grand Prize.
-    if (config('wilayah.draw_mode') === UndianSettings::MODE_GLOBAL6) {
-        return redirect('/grand-prize');
-    }
-
     return view('dashboard');
 });
 

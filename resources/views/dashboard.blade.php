@@ -16,17 +16,21 @@
     <script src="{{ asset('/codebase/js/codebase.app.min-5.11.js') }}"></script>
     <script>
         @php
-            $wilayahInfo = \App\Support\Wilayah::find(config('wilayah.active'));
+            $wilayahAktif = trim((string) config('wilayah.active'));
+            $wilayahInfo = $wilayahAktif !== ''
+                ? \App\Support\Wilayah::find($wilayahAktif)
+                : \App\Support\Wilayah::province();
+            $namaWilayah = $wilayahInfo['found'] ? $wilayahInfo['name'] : 'Jawa Tengah';
+            $platDaerah = \App\Support\Wilayah::plateCodes($wilayahAktif !== '' ? $wilayahAktif : null);
         @endphp
         window.appConfig = {
             appName: "{{ config('app.name') }}",
             year: "{{ date('Y') }}",
-            kabkota: "{{ config('wilayah.active') }}",
+            kabkota: "{{ $namaWilayah }}",
             winnersPerPage: {{ (int) config('wilayah.winners_per_page', 5) }},
-            drawMode: "{{ config('wilayah.draw_mode') }}",
             // Kode plat daerah aktif (dari .env APP_KABKOTA) untuk animasi
             // pengundian — tersedia sejak halaman dimuat.
-            platDaerah: {!! json_encode(\App\Support\Wilayah::plateCodes()) !!},
+            platDaerah: {!! json_encode($platDaerah) !!},
             platJateng: `{!! json_encode(config('plat_jateng')) !!}`
         };
     </script>

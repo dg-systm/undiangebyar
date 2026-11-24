@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('draws', function (Blueprint $table) {
-            // Penanda undian grand prize (global) vs undian biasa per kecamatan.
+            // Penanda undian grand prize (global) vs undian biasa
+            // per koordinator/wilayah (Samsat).
             // 'after()' tidak didukung SQL Server, jadi kolom ditambahkan tanpa posisi eksplisit.
             $table->boolean('is_global')->default(false);
         });

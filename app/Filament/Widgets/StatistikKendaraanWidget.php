@@ -17,21 +17,35 @@ class StatistikKendaraanWidget extends BaseWidget
     protected function getStats(): array
     {
         // Sumber data wilayah: config/coordinator.php (melalui helper Wilayah).
-        $info = Wilayah::find(config('wilayah.active'));
-        $wilayahName = $info['found'] ? $info['name'] : (config('wilayah.active') ?: 'Wilayah');
+        // APP_KABKOTA kosong = cakupan seluruh Jawa Tengah.
+        $active = trim((string) config('wilayah.active'));
+        $isProvince = $active === '';
 
-        // Kecamatan & kelurahan mengikuti daftar mapping wilayah aktif
-        // (sama dengan yang tampil di sidebar).
+        $info = $isProvince ? Wilayah::province() : Wilayah::find($active);
+
+        if (!$info['found']) {
+            $isProvince = true;
+            $info = Wilayah::province();
+        }
+
+        $wilayahName = $isProvince
+            ? config('wilayah.province_name', 'Provinsi Jawa Tengah')
+            : ($info['name'] ?: 'Wilayah');
+
+        // Kecamatan & kelurahan mengikuti daftar mapping wilayah.
         $totalKecamatan = $info['kecamatan_count'];
         $totalKelurahan = $info['kelurahan_count'];
 
-        // Total kendaraan dibatasi ke Samsat wilayah aktif.
-        // Hasil count di-cache sebentar karena tabel kendaraan berisi ratusan
-        // ribu baris dan datanya tidak berubah saat aplikasi dipakai.
+        // Total kendaraan dibatasi ke Samsat wilayah aktif; untuk cakupan
+        // seluruh Jawa Tengah, semua kendaraan dihitung. Hasil count
+        // di-cache sebentar karena tabel kendaraan berisi ratusan ribu baris.
+        $samsatIds = $isProvince ? [] : $info['samsat_ids'];
+        $cacheKey = 'widget.kendaraan_count.' . md5($isProvince ? 'province' : implode(',', $samsatIds));
+
         $totalKendaraan = Cache::remember(
-            'widget.kendaraan_count.' . md5(implode(',', $info['samsat_ids'])),
+            $cacheKey,
             now()->addMinutes(10),
-            fn (): int => $this->kendaraanWilayahQuery($info['samsat_ids'])->count()
+            fn (): int => $this->kendaraanWilayahQuery($samsatIds)->count()
         );
 
         return [
@@ -54,8 +68,8 @@ class StatistikKendaraanWidget extends BaseWidget
 
     /**
      * Query kendaraan yang dibatasi ke Samsat wilayah aktif.
-     * Bila wilayah belum terdaftar, tidak mengembalikan data apa pun
-     * (bukan total seluruh Jawa Tengah).
+     * Bila daftar Samsat kosong (cakupan seluruh Jawa Tengah), semua
+     * kendaraan dihitung.
      */
     protected function kendaraanWilayahQuery(array $samsatIds)
     {
@@ -63,8 +77,6 @@ class StatistikKendaraanWidget extends BaseWidget
 
         if (!empty($samsatIds)) {
             $query->whereIn('id_lokasi', $samsatIds);
-        } else {
-            $query->whereRaw('1 = 0');
         }
 
         return $query;

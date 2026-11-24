@@ -1,6 +1,6 @@
 @php
     $user = filament()->auth()->user();
-    $kabkota = config('wilayah.active') ?: config('app.name');
+    $kabkota = config('wilayah.active') ?: config('wilayah.province_name', 'Provinsi Jawa Tengah');
 @endphp
 
 <x-filament-widgets::widget class="fi-account-widget">
