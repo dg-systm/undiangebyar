@@ -1303,6 +1303,9 @@ export default {
 
         const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+        // Pemulihan hasil undian yang sedang berjalan (shared promise).
+        let recoveryInFlight = null;
+
         // ===== Sound effect (meniru halaman referensi, Web Audio API) =====
         // Preferensi suara dibagi dengan halaman undian biasa ("undianSound").
         let AC = null;
@@ -2175,32 +2178,65 @@ export default {
          * (request terputus setelah backend menyimpan pemenang, mis. perangkat
          * standby lama). Endpoint /api/draw/recent mengembalikan hasil undian
          * yang baru saja tersimpan dalam bentuk respons yang sama.
+         *
+         * Konteks undian (is_global, quantity, prize_id) dikirim agar server
+         * hanya mengembalikan draw grand prize yang cocok — bukan undian biasa
+         * atau undian lama. Percobaan diulang karena server bisa saja masih
+         * memproses draw saat percobaan pertama (SP lambat setelah standby).
          */
         const recoverDraw = async () => {
-            try {
-                const response = await axios.get("api/draw/recent", {
-                    timeout: 10000,
-                });
-                const items = response.data?.data;
+            const params = {
+                is_global: 1,
+                quantity: parseInt(form.quantity) || "",
+                prize_id: form.prize_ids[0] ?? "",
+            };
 
-                if (
-                    response.data?.recovered &&
-                    Array.isArray(items) &&
-                    items.length > 0
-                ) {
-                    winnerList.value = items;
-                    winnersReady.value = true;
-                    getOptionsPrize();
-                    alert(
-                        "Koneksi ke server sempat terputus, tetapi hasil undian sudah tersimpan di server dan kini ditampilkan.",
-                    );
-                    return true;
+            const runRecovery = async () => {
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    if (attempt > 0) {
+                        await delay(2500);
+                    }
+
+                    try {
+                        const response = await axios.get("api/draw/recent", {
+                            timeout: 10000,
+                            params,
+                        });
+                        const items = response.data?.data;
+
+                        if (
+                            response.data?.recovered &&
+                            Array.isArray(items) &&
+                            items.length > 0
+                        ) {
+                            winnerList.value = items;
+                            winnersReady.value = true;
+                            getOptionsPrize();
+                            alert(
+                                "Koneksi ke server sempat terputus, tetapi hasil undian sudah tersimpan di server dan kini ditampilkan.",
+                            );
+                            return true;
+                        }
+                    } catch (error) {
+                        console.error("Gagal memulihkan hasil undian:", error);
+                    }
                 }
-            } catch (error) {
-                console.error("Gagal memulihkan hasil undian:", error);
+
+                return false;
+            };
+
+            // Pemulihan dibagi (shared) antar pemanggil: pickWinner dan
+            // drawHandle bisa sama-sama memanggil recoverDraw. Tanpa ini dua
+            // loop pemulihan berjalan paralel (alert ganda, hasil ganda).
+            if (recoveryInFlight) {
+                return recoveryInFlight;
             }
 
-            return false;
+            recoveryInFlight = runRecovery();
+            const result = await recoveryInFlight;
+            recoveryInFlight = null;
+
+            return result;
         };
 
         const pickWinner = async () => {
@@ -2389,6 +2425,14 @@ export default {
                 const elapsed = Date.now() - startedAt;
                 if (elapsed < DRAW_START_DELAY) {
                     await delay(DRAW_START_DELAY - elapsed);
+                }
+
+                if (!picked) {
+                    // Upaya terakhir sebelum menyerah: server bisa saja
+                    // selesai menyimpan pemenang setelah request dianggap
+                    // gagal/timeout. Tanpa ini data yang tersimpan di server
+                    // tidak pernah tampil di front-end.
+                    picked = await recoverDraw();
                 }
 
                 if (!picked) {

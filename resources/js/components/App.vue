@@ -2537,6 +2537,9 @@ export default {
         // baris (undianList) saat hasil pemenang diterima dari server.
         let nameTick = null;
 
+        // Pemulihan hasil undian yang sedang berjalan (shared promise).
+        let recoveryInFlight = null;
+
         const spinTick = () => {
             // Bunyi "tek-tek" mesin slot, sinkron dengan pergantian nama.
             tone(900 + Math.random() * 500, 0.03, "triangle", 0.014);
@@ -2573,6 +2576,62 @@ export default {
             row.spinning = false;
         };
 
+        // Samakan penulisan nama Samsat agar pencocokan tidak sensitif huruf
+        // dan toleran label gabungan ("Blora -> Cepu", "â†’" rusak, "Kab. X").
+        const normalizeSamsatLabel = (value) =>
+            String(value || "")
+                .replace(/â†’|→/g, "->")
+                .replace(/\b(Kab\.|Kota)\b/g, "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toUpperCase();
+
+        /**
+         * Urutkan hasil undian sesuai kelompok Samsat pada form.samsats.
+         *
+         * Wajib untuk jalur pemulihan (recoverDraw): urutan data dari
+         * /api/draw/recent tidak dijamin sama dengan urutan kelompok
+         * form.samsats, sedangkan tampilan memetakan baris berdasarkan
+         * posisi. Tanpa pengurutan ini hasil pulihan tampil tercampur
+         * antar Samsat.
+         */
+        const orderWinnersForDisplay = (items) => {
+            if (!Array.isArray(items) || items.length === 0) return items;
+            if (!form.samsats.length) return items;
+
+            const groups = form.samsats.map((samsat) =>
+                normalizeSamsatLabel(samsat)
+                    .split("->")
+                    .flatMap((part) => part.split(","))
+                    .map((part) => part.trim())
+                    .filter(Boolean),
+            );
+
+            const ordered = [];
+            const leftover = [];
+
+            items.forEach((item) => {
+                const lokasi = normalizeSamsatLabel(item.lokasi);
+                const groupIndex = groups.findIndex((names) =>
+                    names.includes(lokasi),
+                );
+
+                if (groupIndex >= 0) {
+                    if (!ordered[groupIndex]) ordered[groupIndex] = [];
+                    ordered[groupIndex].push(item);
+                } else {
+                    leftover.push(item);
+                }
+            });
+
+            const flat = [];
+            for (let i = 0; i < groups.length; i++) {
+                if (ordered[i]) flat.push(...ordered[i]);
+            }
+
+            return [...flat, ...leftover];
+        };
+
         /**
          * Coba pulihkan hasil undian yang mungkin sudah tersimpan di server.
          *
@@ -2581,32 +2640,77 @@ export default {
          * tetapi responsnya tidak sampai ke front-end. Endpoint
          * /api/draw/recent mengembalikan hasil undian yang baru saja
          * tersimpan agar tampilan tetap konsisten dengan database.
+         *
+         * Konteks pengundian (quantity, prize_id, samsats) dikirim agar
+         * server hanya mengembalikan draw yang cocok — bukan undian lama
+         * yang kebetulan baru tersimpan. Percobaan diulang beberapa kali
+         * karena server bisa saja masih memproses draw saat percobaan
+         * pertama (SP lambat setelah standby).
          */
-        const recoverDraw = async () => {
-            try {
-                const response = await axios.get("api/draw/recent", {
-                    timeout: 10000,
-                });
-                const items = response.data?.data;
+        const recoverDraw = async (session = null) => {
+            const params = {
+                is_global: 0,
+                quantity: form.quantity,
+                prize_id: form.prize_ids[0] ?? "",
+                samsats: form.samsats,
+            };
 
-                if (
-                    response.data?.recovered &&
-                    Array.isArray(items) &&
-                    items.length > 0
-                ) {
-                    winnerList.value = items;
-                    wasRecovered.value = true;
-                    getOptionsPrize();
-                    alert(
-                        "Koneksi ke server sempat terputus, tetapi hasil undian sudah tersimpan di server dan kini ditampilkan.",
-                    );
-                    return true;
+            const runRecovery = async () => {
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    if (attempt > 0) {
+                        await delay(2500);
+                    }
+
+                    // Bila operator sudah memulai sesi undian baru, pemulihan
+                    // sesi lama tidak boleh lagi menerapkan hasil.
+                    if (session !== null && session !== drawSession) {
+                        return false;
+                    }
+
+                    try {
+                        const response = await axios.get("api/draw/recent", {
+                            timeout: 10000,
+                            params,
+                        });
+                        const items = response.data?.data;
+
+                        if (
+                            response.data?.recovered &&
+                            Array.isArray(items) &&
+                            items.length > 0
+                        ) {
+                            if (session !== null && session !== drawSession) {
+                                return false;
+                            }
+
+                            winnerList.value = items;
+                            wasRecovered.value = true;
+                            getOptionsPrize();
+                            alert(
+                                "Koneksi ke server sempat terputus, tetapi hasil undian sudah tersimpan di server dan kini ditampilkan.",
+                            );
+                            return true;
+                        }
+                    } catch (error) {
+                        console.error("Gagal memulihkan hasil undian:", error);
+                    }
                 }
-            } catch (error) {
-                console.error("Gagal memulihkan hasil undian:", error);
+
+                return false;
+            };
+
+            // Pemulihan dibagi (shared) antar pemanggil: pickWinner dan
+            // drawHandle bisa sama-sama memanggil recoverDraw. Tanpa ini dua
+            // loop pemulihan berjalan paralel (alert ganda, hasil ganda).
+            if (recoveryInFlight) {
+                return recoveryInFlight;
             }
 
-            return false;
+            recoveryInFlight = runRecovery();
+            const result = await recoveryInFlight;
+            recoveryInFlight = null;
+
+            return result;
         };
 
         const pickWinner = async (session) => {
@@ -2663,7 +2767,7 @@ export default {
                     !error.response;
 
                 if (connectionIssue) {
-                    const recovered = await recoverDraw();
+                    const recovered = await recoverDraw(session);
 
                     if (recovered) {
                         return true;
@@ -2693,32 +2797,36 @@ export default {
         };
 
         const parseWinner = () => {
-            undianList.value = winnerList.value.map((item, index) => {
-                const parts = item.no_polisi.match(/[a-zA-Z]+|[0-9]+/g) || [
-                    "XX",
-                    "0000",
-                    "XX",
-                ];
-                const kodeWilayah = parts[0] || "XX";
-                const angka = parts[1] || "0000";
-                const kodeSeri = parts.slice(2).join("") || "XX";
+            undianList.value = orderWinnersForDisplay(winnerList.value).map(
+                (item, index) => {
+                    const parts = item.no_polisi.match(
+                        /[a-zA-Z]+|[0-9]+/g,
+                    ) || [
+                        "XX",
+                        "0000",
+                        "XX",
+                    ];
+                    const kodeWilayah = parts[0] || "XX";
+                    const angka = parts[1] || "0000";
+                    const kodeSeri = parts.slice(2).join("") || "XX";
 
-                return {
-                    id: index + 1,
-                    kodeWilayah,
-                    angka,
-                    kodeSeri,
-                    spinning: true,
-                    revealed: false,
-                    spinName: randomName(),
-                    id_kendaraan: item.id_kendaraan,
-                    nama: item.nama,
-                    alamat: item.alamat,
-                    roda: item.roda,
-                    lokasi: item.lokasi,
-                    prize: item.prize || { name: "-" },
-                };
-            });
+                    return {
+                        id: index + 1,
+                        kodeWilayah,
+                        angka,
+                        kodeSeri,
+                        spinning: true,
+                        revealed: false,
+                        spinName: randomName(),
+                        id_kendaraan: item.id_kendaraan,
+                        nama: item.nama,
+                        alamat: item.alamat,
+                        roda: item.roda,
+                        lokasi: item.lokasi,
+                        prize: item.prize || { name: "-" },
+                    };
+                },
+            );
         };
 
         const settleTimers = [];
@@ -2919,6 +3027,15 @@ export default {
                 }
 
                 if (session !== drawSession) return;
+
+                if (!picked) {
+                    // Upaya terakhir sebelum menyerah: server bisa saja
+                    // selesai menyimpan pemenang setelah request dianggap
+                    // gagal/timeout (SP lambat setelah standby). Tanpa ini,
+                    // data yang tersimpan di server tidak pernah tampil.
+                    const recovered = await recoverDraw(session);
+                    picked = recovered && session === drawSession;
+                }
 
                 if (!picked) {
                     // Undian gagal / melewati batas waktu: hentikan animasi,
