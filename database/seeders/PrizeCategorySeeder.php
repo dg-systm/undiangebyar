@@ -20,13 +20,8 @@ class PrizeCategorySeeder extends Seeder
                 'description' => null,
             ],
             [
-                'name' => 'Emas',
-                'level' => 2,
-                'description' => null,
-            ],
-            [
                 'name' => 'Grand Prize',
-                'level' => 3,
+                'level' => 2,
                 'description' => null,
             ],
         ];

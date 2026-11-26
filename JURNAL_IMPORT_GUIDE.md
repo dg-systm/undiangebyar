@@ -96,15 +96,18 @@ Catatan kualitas data:
 
 ### 4.1 Stored procedure pengundian
 
-Migrasi `2026_11_23_000000_recreate_get_winner_procedures` membuat ulang:
+Migrasi `2026_11_23_000000_recreate_get_winner_procedures` dan
+`2026_11_24_000000_ensure_get_winner_stored_procedures` membuat ulang:
 
-- `getWinner(@id_lokasi_samsat, @id_kecamatan, @length)`
+- `getWinner(@id_lokasi_samsat, @id_kecamatan, @length, @roda = 0)`
 - `getWinnerBbn(@id_lokasi_samsat, @id_kecamatan, @length)`
 
-Versi baru memfilter kendaraan berdasarkan Samsat/kecamatan **terlebih
-dahulu**, lalu mengacak dengan `ORDER BY NEWID()`. Versi lama mengambil
-sampel ID acak dari seluruh tabel; untuk Samsat kecil cara itu bisa
-mengembalikan lebih sedikit dari jumlah yang diminta.
+Parameter `@roda` bersifat opsional dan dipertahankan agar signature tetap
+kompatibel dengan `spgetwinner.txt` versi lama. Versi baru memfilter kendaraan
+berdasarkan Samsat/kecamatan **terlebih dahulu**, lalu mengacak dengan
+`ORDER BY NEWID()`. Versi lama mengambil sampel ID acak dari seluruh tabel;
+untuk Samsat kecil cara itu bisa mengembalikan lebih sedikit dari jumlah yang
+diminta, bahkan menghasilkan baris `ERROR`/`INFINITY LOOP`.
 
 `getWinnerBbn` hanya memakai kendaraan dengan `id_pendaftaran = 1`
 (BBNKB), dan sekarang ikut dibuat oleh migrasi sehingga tidak hilang saat

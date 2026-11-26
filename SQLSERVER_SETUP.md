@@ -35,18 +35,20 @@ Artinya tinggal **satu langkah wajib** (mengaktifkan TCP/IP port 1433 secara per
 - `.env` → `APP_ID_LOKASI` dipakai untuk validasi silang ID Samsat pada pengundian. Contoh Grobogan: `APP_ID_LOKASI=8`, sehingga aplikasi memanggil `EXEC getWinner '8', '<kode_kecamatan>', <jumlah>` dan menolak pengundian bila mapping wilayah menghasilkan ID lain.
 - `config/database.php` → blok `sqlsrv` mengaktifkan `encrypt` + `trust_server_certificate` dari env.
 - `database/migrations/2026_06_04_000001_add_prize_category_id_to_draws_table.php` → `->after('prize_id')` dihapus karena tidak didukung SQL Server.
-- Stored procedure `getWinner` sudah otomatis dibuat versi SQL Server oleh migrasi `2026_06_18_095935_create_function_get_winner.php` (definisi terpusat di `app/Support/GetWinnerProcedure.php`).
-- Migrasi `2026_10_22_000000_update_get_winner_with_kecamatan.php` memastikan database lama ikut memakai signature terbaru:
+- Stored procedure `getWinner` dan `getWinnerBbn` otomatis dibuat oleh migrasi (definisi terpusat di `app/Support/GetWinnerProcedure.php`).
+- Migrasi `2026_11_24_000000_ensure_get_winner_stored_procedures.php` memastikan kedua SP selalu ikut terpasang saat project di-pull ke laptop lain lalu `php artisan migrate`. Signature-nya kompatibel dengan versi lama:
 
   ```sql
-  EXEC getWinner @id_lokasi_samsat, @id_kecamatan, @length
+  EXEC getWinner @id_lokasi_samsat, @id_kecamatan, @length, @roda = 0
 
   -- contoh: 1 pemenang dari Kecamatan Purwodadi (0801), Samsat Grobogan (8)
   EXEC getWinner '8', '0801', 1
+  EXEC getWinner '8', '', 5, 4   -- hanya kendaraan roda >= 4
   ```
 
   - `@id_lokasi_samsat = 999` → mode global (Grand Prize), `@id_kecamatan` diabaikan.
   - `@id_kecamatan = ''` → semua kecamatan pada Samsat tersebut.
+  - `@roda = 0` → semua roda; `4` → roda >= 4; `2` → roda < 4.
 
 ---
 

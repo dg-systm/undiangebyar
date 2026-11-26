@@ -82,10 +82,10 @@ class DrawingService
     /**
      * Ambil kandidat pemenang dari SP sampai jumlah yang diminta terpenuhi.
      *
-     * SP mengambil sampel acak dari rentang ID kendaraan, sehingga untuk
-     * kecamatan dengan populasi kecil satu pemanggilan bisa mengembalikan
-     * lebih sedikit dari yang diminta. Pemanggilan diulang beberapa kali
-     * tanpa mengubah isi SP.
+     * SP memfilter kendaraan yang memenuhi syarat terlebih dahulu, lalu
+     * mengacak dengan ORDER BY NEWID(). Pemanggilan tetap diulang beberapa
+     * kali sebagai pengaman bila sebagian hasil harus dibuang (mis. ID yang
+     * sudah dipakai pada penarikan sebelumnya).
      */
     public function getWinnerCandidates(int $idLokasi, ?string $idKecamatan, int $required, int $maxAttempts = 10, bool $isBbnkb = false, array $excludeIds = []): Collection
     {

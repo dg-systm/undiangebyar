@@ -16,39 +16,33 @@ class PrizeSeeder extends Seeder
         $data = [
             [
                 'prize_category_id' => 1,
-                'name' => 'Tabungan Rp 2 jt',
-                'description' => 'Tabungan uang di Bank Jateng senilai Rp 2.000.000',
+                'name' => 'Tabungan Rp 2,5 jt',
+                'description' => 'Tabungan uang di Bank Jateng senilai Rp 2.500.000',
                 'quantity' => 185
             ],
             [
                 'prize_category_id' => 2,
-                'name' => 'Emas 1 gr',
-                'description' => '1 Keping Emas 1 gr',
-                'quantity' => 5
+                'name' => 'Tabungan Rp 15 jt',
+                'description' => 'Tabungan uang di Bank Jateng senilai Rp 15.000.000',
+                'quantity' => 1
             ],
             [
                 'prize_category_id' => 2,
-                'name' => 'Emas 2,5 gr',
-                'description' => '1 Keping Emas 2,5 gr',
+                'name' => 'Tabungan Rp 10 jt',
+                'description' => 'Tabungan uang di Bank Jateng senilai Rp 10.000.000',
+                'quantity' => 1
+            ],
+            [
+                'prize_category_id' => 2,
+                'name' => 'Tabungan Rp 7,5 jt',
+                'description' => 'Tabungan uang di Bank Jateng senilai Rp 7.500.000',
+                'quantity' => 1
+            ],
+            [
+                'prize_category_id' => 2,
+                'name' => 'Motor Honda Beat',
+                'description' => 'Motor Honda Beat (2 unit)',
                 'quantity' => 2
-            ],
-            [
-                'prize_category_id' => 3,
-                'name' => 'Tab. Rp 7,5 jt + Emas 5 gr',
-                'description' => 'Tabungan Rp 7.500.000 + Emas 5 gr',
-                'quantity' => 1
-            ],
-            [
-                'prize_category_id' => 3,
-                'name' => 'Tab Rp 5 jt + Emas 5 gr',
-                'description' => 'Tabungan Rp 5.000.000 + Emas 5 gr',
-                'quantity' => 1
-            ],
-            [
-                'prize_category_id' => 3,
-                'name' => 'Tab. Rp 3 jt + Emas 2,5 gr',
-                'description' => 'Tabungan Rp 3.000.000 + Emas 2,5 gr',
-                'quantity' => 1
             ],
         ];
 

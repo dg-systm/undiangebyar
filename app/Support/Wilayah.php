@@ -148,8 +148,8 @@ class Wilayah
 
     /**
      * Daftar koordinator lokasi dengan format seperti aplikasi undianbapenda:
-     * label wilayah + daftar Samsat (Samsat Pembantu digabung ke induknya
-     * dengan format "Induk → Pembantu").
+     * label wilayah + daftar Samsat (hanya induk; Samsat Pembantu tidak
+     * ditampilkan karena kecamatan/kelurahannya sudah tercakup induknya).
      *
      * @return array<string, array{label: string, samsat: array<int, string>}>
      */
@@ -175,11 +175,9 @@ class Wilayah
             $samsats = [];
 
             foreach ($parents as $samsatName => $displayName) {
-                $subSamsats = $children[$samsatName] ?? [];
-
-                $samsats[] = empty($subSamsats)
-                    ? $displayName
-                    : $displayName . ' → ' . implode(', ', $subSamsats);
+                // Samsat Pembantu tidak ditampilkan (tanpa format
+                // "Induk → Pembantu") — hanya induk yang muncul.
+                $samsats[] = $displayName;
 
                 unset($children[$samsatName]);
             }

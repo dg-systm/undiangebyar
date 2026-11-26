@@ -1,0 +1,96 @@
+USE [undian_samsat]
+GO
+/****** Object:  StoredProcedure [dbo].[getWinner]    Script Date: 23/11/2026 07.50.39 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER PROCEDURE [dbo].[getWinner]
+--exec getWinner 12,'1201',3
+    @id_lokasi_samsat INT
+    ,@id_kecamatan VARCHAR(10)
+    ,@length INT = 5
+	,@roda INT = 0
+				
+AS
+BEGIN
+	SET NOCOUNT ON;
+	DECLARE @rowaffetcted INT=0,@run INT=0
+
+	DECLARE @winners TABLE (
+	[id] BIGINT
+    ,[id_kendaraan] BIGINT
+    ,[no_polisi] VARCHAR(10)
+    ,roda INT
+	,[nama] VARCHAR(100)
+    ,[alamat] VARCHAR(50)
+    ,lokasi VARCHAR(50)
+    ,id_kecamatan CHAR(4)
+    ,id_kelurahan CHAR(7)
+	)
+                
+	WHILE @rowaffetcted<@length
+	BEGIN
+		DELETE FROM @winners
+				
+		IF @run=100
+		BEGIN
+			INSERT INTO @winners
+			SELECT TOP (@length) 
+				[id]=ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+            ,[id_kendaraan]=ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+            ,[no_polisi]='ERROR'+CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS varchar)
+            ,roda=2
+            ,[nama]='INFINITY LOOP'+CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS varchar)
+            ,alamat='YES'
+            ,lokasi='NOT FOUND'
+            ,id_kecamatan=9999
+            ,id_kelurahan=9999999
+			FROM sys.objects
+			SET @rowaffetcted=@length
+		END
+		ELSE
+		BEGIN
+			INSERT INTO @winners
+            SELECT TOP (@length) 
+					[id]
+                ,[id_kendaraan]
+                ,[no_polisi]
+                ,roda
+                ,[nama]
+                ,LEFT([alamat],8)+'************' AS alamat
+                ,lokasi
+                ,id_kecamatan
+                ,id_kelurahan
+            FROM [dbo].[kendaraans]
+            WHERE 
+				CASE 
+					WHEN @id_lokasi_samsat=999 THEN 999
+					ELSE id_lokasi
+				END=@id_lokasi_samsat
+                AND id_kecamatan LIKE IIF(@id_kecamatan = '', '%', @id_kecamatan)
+                AND id_kendaraan NOT IN (SELECT id_kendaraan FROM winners)
+                AND id_kendaraan NOT IN (SELECT id FROM grand_prizes)
+                AND id IN (
+                    SELECT
+                        FLOOR(RAND(CHECKSUM(NEWID())) * (SELECT TOP 1 id FROM kendaraans ORDER BY id DESC)) + 1
+                    FROM sys.all_objects
+                )
+				AND CASE 
+						WHEN @roda=0 THEN 0
+						WHEN roda>=4 THEN 4
+						ELSE 2
+					END=@roda
+
+			SET @rowaffetcted=@@ROWCOUNT
+			SET @run=@run+1
+		END
+	END
+	IF @rowaffetcted=@length
+	BEGIN
+		SELECT TOP (@length) * FROM @winners
+	END
+						
+END					
+

@@ -8,11 +8,14 @@ use Illuminate\Support\Facades\DB;
  * Definisi stored procedure pengundian.
  *
  * Signature SP (harus sama dengan database undian_samsat):
- *   getWinner(@id_lokasi_samsat INT, @id_kecamatan VARCHAR(10), @length INT = 5)
+ *   getWinner(@id_lokasi_samsat INT, @id_kecamatan VARCHAR(10), @length INT = 5, @roda INT = 0)
  *   getWinnerBbn(@id_lokasi_samsat INT, @id_kecamatan VARCHAR(10), @length INT = 5)
  *
  * - id_lokasi_samsat = 999  -> mode global (Grand Prize), id_kecamatan diabaikan.
  * - id_kecamatan = ''       -> semua kecamatan pada Samsat tersebut.
+ * - roda = 0                -> semua roda; 4 = roda >= 4; 2 = roda < 4.
+ *   Parameter ini opsional agar tetap kompatibel dengan pemanggil lama
+ *   (signature spgetwinner.txt) tanpa mengubah perilaku aplikasi sekarang.
  *
  * Catatan performa:
  * Sebelumnya SQL Server mengambil sampel ID acak dari seluruh tabel lalu
@@ -60,6 +63,7 @@ class GetWinnerProcedure
                 @id_lokasi_samsat INT
                 ,@id_kecamatan VARCHAR(10)
                 ,@length INT = 5
+                ,@roda INT = 0
             AS
             BEGIN
                 SET NOCOUNT ON;
@@ -80,7 +84,12 @@ class GetWinnerProcedure
                             ,k.[id_kecamatan]
                             ,k.[id_kelurahan]
                         FROM [dbo].[kendaraans] AS k
-                        WHERE NOT EXISTS (
+                        WHERE CASE
+                                WHEN @roda = 0 THEN 0
+                                WHEN k.[roda] >= 4 THEN 4
+                                ELSE 2
+                            END = @roda
+                        AND NOT EXISTS (
                             SELECT 1
                             FROM [dbo].[winners] AS w
                             WHERE w.[id_kendaraan] = k.[id_kendaraan]
@@ -111,6 +120,11 @@ class GetWinnerProcedure
                                 OR @id_kecamatan = ''
                                 OR k.[id_kecamatan] LIKE @id_kecamatan
                             )
+                            AND CASE
+                                WHEN @roda = 0 THEN 0
+                                WHEN k.[roda] >= 4 THEN 4
+                                ELSE 2
+                            END = @roda
                             AND NOT EXISTS (
                                 SELECT 1
                                 FROM [dbo].[winners] AS w

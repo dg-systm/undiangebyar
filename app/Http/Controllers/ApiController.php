@@ -6,6 +6,7 @@ use App\Models\Kendaraan;
 use App\Models\Prize;
 use App\Support\Wilayah;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ApiController extends Controller
 {
@@ -36,7 +37,7 @@ class ApiController extends Controller
      *       ...
      *     }
      *
-     * Samsat Pembantu digabung dengan induknya, mis. "Blora → Cepu".
+     * Samsat Pembantu tidak ditampilkan; hanya induknya, mis. "Blora".
      */
     public function coordinatorMapping()
     {
@@ -100,6 +101,47 @@ class ApiController extends Controller
                 ? ($info['plats'] ?? [])
                 : self::extractPlateCode($info['plat']),
         ], 200);
+    }
+
+    /**
+     * Stok data acakan untuk animasi pengundian Grand Prize.
+     *
+     * Mengambil sampel kendaraan yang BELUM pernah menang langsung dari
+     * database sehingga tampilan pengacakan (nama, alamat, kecamatan, roda)
+     * terasa nyata dan bervariatif — tetapi bukan data pemenang, jadi hasil
+     * undian tidak bocor sebelum di-reveal.
+     */
+    public function scrambleStock()
+    {
+        $query = Kendaraan::query()
+            ->select('id_kendaraan', 'nama', 'alamat', 'id_kecamatan', 'lokasi', 'roda')
+            // Kendaraan yang sudah pernah menang tidak boleh ikut sampel.
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('winners as w')
+                    ->whereColumn('w.id_kendaraan', 'kendaraans.id_kendaraan');
+            });
+
+        // Kendaraan yang masuk daftar grand prize juga dikeluarkan.
+        // Perbandingan mengikuti SP getWinner: id_kendaraan dicast ke angka.
+        if (DB::connection()->getDriverName() === 'sqlsrv') {
+            $query->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('grand_prizes as g')
+                    ->whereColumn('g.id', DB::raw('TRY_CAST(kendaraans.id_kendaraan AS BIGINT)'));
+            });
+        } else {
+            $query->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('grand_prizes as g')
+                    ->whereColumn('g.id', DB::raw('CAST(kendaraans.id_kendaraan AS SIGNED)'));
+            });
+        }
+
+        return response()->json(
+            $query->inRandomOrder()->limit(60)->get(),
+            200,
+        );
     }
 
     /**

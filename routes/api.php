@@ -25,6 +25,7 @@ Route::group(['prefix' => 'get-data'], function () {
     Route::get('locations', [ApiController::class, 'locationsAll']);
     Route::get('coordinator', [ApiController::class, 'coordinatorMapping']);
     Route::get('wilayah', [ApiController::class, 'wilayah']);
+    Route::get('scramble', [ApiController::class, 'scrambleStock']);
 });
 
 Route::group(['prefix' => 'draw'], function () {

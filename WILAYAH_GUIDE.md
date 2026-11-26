@@ -49,8 +49,10 @@ php artisan config:clear
 7. Setiap Samsat menghasilkan pemenang sebanyak jumlah yang diatur. Pemenang
    diambil melalui SP `getWinner(id_lokasi, '', jumlah)` yang sudah ada.
 
-Samsat yang sudah diundi ditandai centang dan otomatis tidak terpilih lagi
-agar undian berikutnya tidak mengulang Samsat yang sama.
+Penanda Samsat yang sudah diundi tampil pada dropdown **Pilih Koordinator
+Lokasi** (mis. `✓ 2/5 Samsat sudah diundi`). Setelah diundi, Samsat tersebut
+otomatis tidak terpilih lagi agar undian berikutnya tidak mengulang Samsat
+yang sama.
 
 ### Grand Prize (global semua kecamatan)
 
